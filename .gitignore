@@ -1,10 +1,9 @@
 # Go build output
-/main
+/bin/
 *.exe
-/build/
 
 # SSH host key (private — jangan di-commit)
-host_key
+/keys/
 *.pem
 
 # Node

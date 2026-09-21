@@ -31,7 +31,7 @@ func Parse() (*Config, error) {
 	fs.StringVar(&c.Port, "p", "", "port listen SSH server (WAJIB)")
 	fs.StringVar(&c.Host, "host", "0.0.0.0", "alamat bind server")
 	fs.StringVar(&c.UsersFile, "users", "user.json", "path file kredensial JSON")
-	fs.StringVar(&c.HostKeyFile, "hostkey", "host_key", "path private host key SSH")
+	fs.StringVar(&c.HostKeyFile, "hostkey", "keys/host_key", "path private host key SSH")
 	fs.StringVar(&c.Hostname, "hostname", "localhost", "nama host pada prompt")
 
 	fs.Usage = func() {
