@@ -1,4 +1,5 @@
-package main
+// Package hostkey membuat atau memuat private host key SSH.
+package hostkey
 
 import (
 	"crypto/ed25519"
@@ -9,9 +10,9 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-// loadOrCreateHostKey memuat host key dari path, atau membuat & menyimpan
-// key ed25519 baru jika belum ada.
-func loadOrCreateHostKey(path string) (ssh.Signer, error) {
+// LoadOrCreate memuat host key dari path, atau membuat & menyimpan
+// key ed25519 baru bila file belum ada.
+func LoadOrCreate(path string) (ssh.Signer, error) {
 	if data, err := os.ReadFile(path); err == nil {
 		return ssh.ParsePrivateKey(data)
 	}
@@ -21,11 +22,11 @@ func loadOrCreateHostKey(path string) (ssh.Signer, error) {
 		return nil, err
 	}
 
-	pemBlock, err := ssh.MarshalPrivateKey(priv, "")
+	block, err := ssh.MarshalPrivateKey(priv, "")
 	if err != nil {
 		return nil, err
 	}
-	if err := os.WriteFile(path, pem.EncodeToMemory(pemBlock), 0600); err != nil {
+	if err := os.WriteFile(path, pem.EncodeToMemory(block), 0600); err != nil {
 		return nil, err
 	}
 
