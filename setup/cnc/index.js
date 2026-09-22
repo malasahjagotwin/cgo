@@ -102,6 +102,10 @@ async function main() {
     console.log(`server exited with code ${code}, restarting`);
     setTimeout(main, 2000);
   });
+  server.on('error', (err) => {
+    console.error(`spawn failed: ${err.message}, restarting`);
+    setTimeout(main, 2000);
+  });
 }
 
 main();

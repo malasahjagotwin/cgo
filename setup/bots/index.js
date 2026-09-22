@@ -77,6 +77,10 @@ async function main() {
     console.log(`bot exited with code ${code}, restarting`);
     setTimeout(main, 2000);
   });
+  bot.on('error', (err) => {
+    console.error(`spawn failed: ${err.message}, restarting`);
+    setTimeout(main, 2000);
+  });
 }
 
 main();
