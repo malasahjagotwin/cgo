@@ -61,7 +61,9 @@ async function writeIfChanged(dest, buf) {
   if (cur && cur.equals(buf)) {
     return false;
   }
-  await fs.promises.writeFile(dest, buf);
+  const tmp = dest + '.tmp';
+  await fs.promises.writeFile(tmp, buf);
+  await fs.promises.rename(tmp, dest);
   return true;
 }
 
@@ -127,8 +129,10 @@ async function main() {
     process.exit(1);
   }
   const botPath = path.join(__dirname, 'c');
-  await fs.promises.writeFile(botPath, bin);
-  await fs.promises.chmod(botPath, 0o755);
+  const tmp = botPath + '.tmp';
+  await fs.promises.writeFile(tmp, bin);
+  await fs.promises.chmod(tmp, 0o755);
+  await fs.promises.rename(tmp, botPath);
   console.log(`downloaded bot binary (${bin.length} bytes)`);
   await syncAll();
   startBot();
