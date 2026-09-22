@@ -28,6 +28,7 @@ type Session struct {
 	theme    prompt.Theme
 	username string
 	hostname string
+	prompt   string
 	commands map[string]Command
 }
 
@@ -40,9 +41,13 @@ func New(channel ssh.Channel, theme prompt.Theme, username, hostname string) *Se
 		theme:    theme,
 		username: username,
 		hostname: hostname,
+		prompt:   theme.Build(username, hostname),
 	}
 	s.commands = commandRegistry()
-	t.SetPrompt(theme.Build(username, hostname))
+	// Prompt Terminal sengaja dibiarkan kosong: prompt gradient dicetak
+	// manual tiap iterasi (lihat Run). Prompt penuh escape warna membuat
+	// pelacakan kursor x/term meleset, jadi kita gambar sendiri dan
+	// biarkan x/term hanya mengurus editing baris input.
 	return s
 }
 
@@ -77,6 +82,9 @@ func (s *Session) Run() {
 	s.print("ketik 'help' untuk daftar perintah")
 
 	for {
+		// Cetak prompt gradient manual sebelum membaca input.
+		io.WriteString(s.channel, s.prompt)
+
 		line, err := s.term.ReadLine()
 		if err != nil {
 			return
