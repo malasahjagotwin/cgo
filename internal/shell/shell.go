@@ -84,6 +84,7 @@ type Session struct {
 	nextID   int
 	slots    []time.Time
 	titleMu  sync.Mutex
+	cols     int
 }
 
 func New(channel ssh.Channel, theme prompt.Theme, user auth.User, hostname string, clients ClientLister, cast Broadcaster, attacks AttackCounter, totalSlots AttackCounter, launch AttackLauncher) *Session {
@@ -104,6 +105,7 @@ func New(channel ssh.Channel, theme prompt.Theme, user auth.User, hostname strin
 		totalSlots: totalSlots,
 		launch:     launch,
 		slots:      make([]time.Time, user.Slot),
+		cols:       80,
 	}
 	s.commands = commandRegistry()
 	return s
@@ -120,7 +122,45 @@ func (s *Session) clear() {
 func (s *Session) SetSize(width, height int) {
 	if width > 0 && height > 0 {
 		s.term.SetSize(width, height)
+		s.cols = width
 	}
+}
+
+func wrapText(indent string, width int, text string) []string {
+	if width <= 0 {
+		width = 80
+	}
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return []string{indent}
+	}
+	limit := width - len(indent) - 1
+	if limit < 1 {
+		limit = 1
+	}
+	var out []string
+	cur := indent
+	curLen := 0
+	first := true
+	for _, w := range words {
+		if !first && curLen+1+len(w) > limit {
+			out = append(out, cur)
+			cur = indent + w
+			curLen = len(w)
+			first = false
+			continue
+		}
+		if first {
+			cur = indent + w
+			curLen = len(w)
+			first = false
+		} else {
+			cur += " " + w
+			curLen += 1 + len(w)
+		}
+	}
+	out = append(out, cur)
+	return out
 }
 
 func (s *Session) activeOwn() int {
@@ -289,7 +329,13 @@ func cmdMethods(s *Session, _ []string) bool {
 		}
 		s.print(s.theme.Gradient(layer) + "\x1b[0m")
 		for _, m := range methods {
-			s.print(fmt.Sprintf("  %-8s %s", m.Name, s.theme.GradientUnderline(m.Description)))
+			label := "  " + m.Name
+			indent := strings.Repeat(" ", len(label)+1)
+			lines := wrapText(indent, s.cols, m.Description)
+			s.print(s.theme.GradientUnderline(label) + "\x1b[0m" + lines[0])
+			for _, l := range lines[1:] {
+				s.print(l)
+			}
 		}
 	}
 	return false
