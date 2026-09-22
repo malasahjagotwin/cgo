@@ -51,3 +51,11 @@ func (s *Store) Authenticate(username, password string) bool {
 func (s *Store) Count() int {
 	return len(s.users)
 }
+
+func (s *Store) Slots() int {
+	total := 0
+	for _, u := range s.users {
+		total += u.Slot
+	}
+	return total
+}
