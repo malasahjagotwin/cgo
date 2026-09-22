@@ -51,12 +51,30 @@ func (s *Session) print(text string) {
 	io.WriteString(s.channel, text+"\r\n")
 }
 
+// clear membersihkan layar sekaligus buffer scrollback klien.
+func (s *Session) clear() {
+	io.WriteString(s.channel, "\x1b[H\x1b[2J\x1b[3J")
+}
+
+// SetSize memberitahu line-editor ukuran terminal klien (kolom x baris).
+// Wajib dipanggil dari pty-req/window-change agar navigasi kursor dan
+// tombol panah berperilaku seperti SSH sungguhan.
+func (s *Session) SetSize(width, height int) {
+	if width > 0 && height > 0 {
+		s.term.SetSize(width, height)
+	}
+}
+
 // Run menjalankan loop baca-eksekusi sampai klien keluar.
 func (s *Session) Run() {
 	defer s.channel.Close()
 
+	// Bersihkan layar + buffer scrollback agar sesi fresh dan
+	// riwayat terminal sebelumnya tidak bisa digulir ke atas.
+	s.clear()
+
 	s.print(s.theme.Gradient("Selamat datang, " + s.username + "!"))
-	s.print(s.theme.Build(s.username, s.hostname) + "\x1b[0mketik 'help' untuk daftar perintah")
+	s.print("ketik 'help' untuk daftar perintah")
 
 	for {
 		line, err := s.term.ReadLine()
@@ -88,7 +106,7 @@ func commandRegistry() map[string]Command {
 			return false
 		}},
 		"clear": {Name: "clear", Help: "bersihkan layar", Run: func(s *Session, _ []string) bool {
-			io.WriteString(s.channel, "\x1b[2J\x1b[H")
+			s.clear()
 			return false
 		}},
 		"echo": {Name: "echo", Help: "cetak kembali argumen", Run: func(s *Session, args []string) bool {

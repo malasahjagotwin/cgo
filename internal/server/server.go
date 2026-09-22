@@ -3,6 +3,7 @@
 package server
 
 import (
+	"encoding/binary"
 	"fmt"
 	"net"
 
@@ -92,10 +93,22 @@ func (s *Server) handleConn(nConn net.Conn) {
 			continue
 		}
 
+		sess := shell.New(channel, s.theme, username, s.cfg.Hostname)
+
 		go func(in <-chan *ssh.Request) {
 			for req := range in {
 				switch req.Type {
-				case "shell", "pty-req":
+				case "pty-req":
+					if w, h, ok := parsePtyReq(req.Payload); ok {
+						sess.SetSize(w, h)
+					}
+					req.Reply(true, nil)
+				case "window-change":
+					if w, h, ok := parseDims(req.Payload); ok {
+						sess.SetSize(w, h)
+					}
+					// window-change tidak butuh balasan
+				case "shell":
 					req.Reply(true, nil)
 				default:
 					req.Reply(false, nil)
@@ -103,6 +116,29 @@ func (s *Server) handleConn(nConn net.Conn) {
 			}
 		}(requests)
 
-		go shell.New(channel, s.theme, username, s.cfg.Hostname).Run()
+		go sess.Run()
 	}
+}
+
+// parsePtyReq membaca lebar & tinggi (kolom x baris) dari payload pty-req.
+// Format (RFC 4254 6.2): string TERM, uint32 width, uint32 height, ...
+func parsePtyReq(payload []byte) (width, height int, ok bool) {
+	if len(payload) < 4 {
+		return 0, 0, false
+	}
+	termLen := binary.BigEndian.Uint32(payload)
+	rest := payload[4:]
+	if uint32(len(rest)) < termLen+8 {
+		return 0, 0, false
+	}
+	return parseDims(rest[termLen:])
+}
+
+// parseDims membaca dua uint32 pertama (width, height) dari payload.
+// Dipakai untuk window-change (RFC 4254 6.7) dan bagian akhir pty-req.
+func parseDims(payload []byte) (width, height int, ok bool) {
+	if len(payload) < 8 {
+		return 0, 0, false
+	}
+	return int(binary.BigEndian.Uint32(payload)), int(binary.BigEndian.Uint32(payload[4:])), true
 }
