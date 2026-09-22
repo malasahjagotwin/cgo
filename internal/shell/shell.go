@@ -78,9 +78,6 @@ func (s *Session) Run() {
 	// riwayat terminal sebelumnya tidak bisa digulir ke atas.
 	s.clear()
 
-	s.print(s.theme.Gradient("Selamat datang, " + s.username + "!"))
-	s.print("ketik 'help' untuk daftar perintah")
-
 	for {
 		// Cetak prompt gradient manual sebelum membaca input.
 		io.WriteString(s.channel, s.prompt)
@@ -95,7 +92,6 @@ func (s *Session) Run() {
 		}
 		cmd, ok := s.commands[fields[0]]
 		if !ok {
-			s.print("perintah tidak dikenal: " + fields[0])
 			continue
 		}
 		if cmd.Run(s, fields[1:]) {

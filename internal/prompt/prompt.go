@@ -22,9 +22,9 @@ type Theme struct {
 
 // DefaultTheme: gradasi merah -> abu-abu -> putih, kurung & @ putih.
 var DefaultTheme = Theme{
-	Start:   RGB{220, 40, 40},    // merah
-	End:     RGB{255, 255, 255},  // putih (abu-abu terlewati di tengah gradasi)
-	Bracket: RGB{255, 255, 255},  // putih
+	Start:   RGB{220, 40, 40},   // merah
+	End:     RGB{255, 255, 255}, // putih (abu-abu terlewati di tengah gradasi)
+	Bracket: RGB{255, 255, 255}, // putih
 }
 
 const reset = "\x1b[0m"
