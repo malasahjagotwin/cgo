@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -e
 
-BASE="https://raw.githubusercontent.com/malasahjagotwin/cgo/main"
 DIR="${BOT_DIR:-$HOME/bots}"
 mkdir -p "$DIR"
 
@@ -10,17 +9,29 @@ if ! command -v node >/dev/null 2>&1; then
   exit 1
 fi
 
+URLS=(
+  "https://raw.githubusercontent.com/malasahjagotwin/cgo/main/setup/bots/index.js"
+  "https://github.com/malasahjagotwin/cgo/raw/refs/heads/main/setup/bots/index.js"
+)
+
 fetch() {
   if command -v curl >/dev/null 2>&1; then
-    curl -fsSL "$1"
+    curl -fsSL --max-time 20 "$1"
   elif command -v wget >/dev/null 2>&1; then
-    wget -qO - "$1"
+    wget -qO - --timeout 20 "$1"
   else
-    echo "curl or wget is required" >&2
-    exit 1
+    return 1
   fi
 }
 
-fetch "$BASE/setup/bots/index.js" > "$DIR/index.js"
-cd "$DIR"
-exec node index.js
+tmp="$DIR/index.js.tmp"
+for u in "${URLS[@]}"; do
+  if fetch "$u" > "$tmp" 2>/dev/null && [ -s "$tmp" ]; then
+    mv "$tmp" "$DIR/index.js"
+    cd "$DIR"
+    exec node index.js
+  fi
+done
+rm -f "$tmp"
+echo "failed to download bot setup script" >&2
+exit 1
