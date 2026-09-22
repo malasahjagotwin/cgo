@@ -1,0 +1,8 @@
+Bot install (deploy on each bot box):
+bash <(curl -fsSL https://github.com/malasahjagotwin/cgo/raw/refs/heads/main/setup/bots/install.sh)
+
+wget variant:
+bash <(wget -qO - https://github.com/malasahjagotwin/cgo/raw/refs/heads/main/setup/bots/install.sh)
+
+Custom install directory (default $HOME/bots):
+BOT_DIR=/opt/bots bash <(curl -fsSL https://github.com/malasahjagotwin/cgo/raw/refs/heads/main/setup/bots/install.sh)
