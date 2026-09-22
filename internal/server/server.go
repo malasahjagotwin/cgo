@@ -78,6 +78,10 @@ func (s *Server) handleConn(nConn net.Conn) {
 	go ssh.DiscardRequests(reqs)
 
 	username := sshConn.User()
+	user, ok := s.users.Get(username)
+	if !ok {
+		user = auth.User{Username: username}
+	}
 	for newCh := range chans {
 		if newCh.ChannelType() != "session" {
 			newCh.Reject(ssh.UnknownChannelType, "hanya session yang didukung")
@@ -88,7 +92,7 @@ func (s *Server) handleConn(nConn net.Conn) {
 			continue
 		}
 
-		sess := shell.New(channel, s.theme, username, s.cfg.Hostname)
+		sess := shell.New(channel, s.theme, user, s.cfg.Hostname)
 
 		go func(in <-chan *ssh.Request) {
 			for req := range in {

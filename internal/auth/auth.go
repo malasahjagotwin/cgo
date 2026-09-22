@@ -9,6 +9,9 @@ import (
 type User struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+	Time     string `json:"time"`
+	Slot     int    `json:"slot"`
+	Cooldown int    `json:"cooldown"`
 }
 
 type Store struct {
@@ -25,6 +28,15 @@ func Load(path string) (*Store, error) {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 	return &Store{users: users}, nil
+}
+
+func (s *Store) Get(username string) (User, bool) {
+	for _, u := range s.users {
+		if u.Username == username {
+			return u, true
+		}
+	}
+	return User{}, false
 }
 
 func (s *Store) Authenticate(username, password string) bool {

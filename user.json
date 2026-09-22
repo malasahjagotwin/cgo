@@ -1,10 +1,16 @@
 [
   {
     "username": "root",
-    "password": "root"
+    "password": "root",
+    "time": "60",
+    "slot": 1,
+    "cooldown": 10
   },
   {
     "username": "wind",
-    "password": "wind"
+    "password": "wind",
+    "time": "60",
+    "slot": 1,
+    "cooldown": 10
   }
 ]
