@@ -1,4 +1,3 @@
-// Package hostkey membuat atau memuat private host key SSH.
 package hostkey
 
 import (
@@ -11,8 +10,6 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-// LoadOrCreate memuat host key dari path, atau membuat & menyimpan
-// key ed25519 baru bila file belum ada. Folder induk dibuat otomatis.
 func LoadOrCreate(path string) (ssh.Signer, error) {
 	if data, err := os.ReadFile(path); err == nil {
 		return ssh.ParsePrivateKey(data)

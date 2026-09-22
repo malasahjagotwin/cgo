@@ -1,10 +1,3 @@
-// Command cnc menjalankan SSH terminal sederhana.
-//
-// Penggunaan:
-//
-//	./main -p 8080
-//
-// Flag -p (port) wajib. Lihat opsi lain dengan: ./main -h
 package main
 
 import (

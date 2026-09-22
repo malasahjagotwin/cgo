@@ -1,6 +1,3 @@
-// Package shell menyediakan shell interaktif per-sesi SSH.
-//
-// Menambah command baru: daftarkan di commandRegistry() di bawah.
 package shell
 
 import (
@@ -13,15 +10,12 @@ import (
 	"github.com/malasahjagotwin/cnc/internal/prompt"
 )
 
-// Command adalah satu perintah shell.
 type Command struct {
 	Name string
 	Help string
-	// Run mengeksekusi perintah. Kembalikan true untuk menutup sesi.
-	Run func(s *Session, args []string) bool
+	Run  func(s *Session, args []string) bool
 }
 
-// Session menampung state satu koneksi shell.
 type Session struct {
 	channel  ssh.Channel
 	term     *term.Terminal
@@ -32,7 +26,6 @@ type Session struct {
 	commands map[string]Command
 }
 
-// New membuat Session baru di atas channel SSH.
 func New(channel ssh.Channel, theme prompt.Theme, username, hostname string) *Session {
 	t := term.NewTerminal(channel, "")
 	s := &Session{
@@ -44,42 +37,29 @@ func New(channel ssh.Channel, theme prompt.Theme, username, hostname string) *Se
 		prompt:   theme.Build(username, hostname),
 	}
 	s.commands = commandRegistry()
-	// Prompt Terminal sengaja dibiarkan kosong: prompt gradient dicetak
-	// manual tiap iterasi (lihat Run). Prompt penuh escape warna membuat
-	// pelacakan kursor x/term meleset, jadi kita gambar sendiri dan
-	// biarkan x/term hanya mengurus editing baris input.
 	return s
 }
 
-// print menulis teks ke terminal klien (dengan CRLF).
 func (s *Session) print(text string) {
 	io.WriteString(s.channel, text+"\r\n")
 }
 
-// clear membersihkan layar sekaligus buffer scrollback klien.
 func (s *Session) clear() {
 	io.WriteString(s.channel, "\x1b[H\x1b[2J\x1b[3J")
 }
 
-// SetSize memberitahu line-editor ukuran terminal klien (kolom x baris).
-// Wajib dipanggil dari pty-req/window-change agar navigasi kursor dan
-// tombol panah berperilaku seperti SSH sungguhan.
 func (s *Session) SetSize(width, height int) {
 	if width > 0 && height > 0 {
 		s.term.SetSize(width, height)
 	}
 }
 
-// Run menjalankan loop baca-eksekusi sampai klien keluar.
 func (s *Session) Run() {
 	defer s.channel.Close()
 
-	// Bersihkan layar + buffer scrollback agar sesi fresh dan
-	// riwayat terminal sebelumnya tidak bisa digulir ke atas.
 	s.clear()
 
 	for {
-		// Cetak prompt gradient manual sebelum membaca input.
 		io.WriteString(s.channel, s.prompt)
 
 		line, err := s.term.ReadLine()
@@ -100,8 +80,6 @@ func (s *Session) Run() {
 	}
 }
 
-// commandRegistry mendefinisikan semua perintah yang tersedia.
-// Tambah perintah baru cukup di sini.
 func commandRegistry() map[string]Command {
 	cmds := map[string]Command{
 		"help": {Name: "help", Help: "tampilkan daftar perintah", Run: cmdHelp},

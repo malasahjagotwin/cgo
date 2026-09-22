@@ -1,5 +1,3 @@
-// Package server menjalankan SSH server: listen, terima koneksi,
-// autentikasi, lalu serahkan tiap sesi ke package shell.
 package server
 
 import (
@@ -16,7 +14,6 @@ import (
 	"github.com/malasahjagotwin/cnc/internal/shell"
 )
 
-// Server menampung dependensi runtime SSH server.
 type Server struct {
 	cfg    *config.Config
 	users  *auth.Store
@@ -24,7 +21,6 @@ type Server struct {
 	sshCfg *ssh.ServerConfig
 }
 
-// New membangun Server dari konfigurasi: memuat user & host key.
 func New(cfg *config.Config) (*Server, error) {
 	users, err := auth.Load(cfg.UsersFile)
 	if err != nil {
@@ -55,7 +51,6 @@ func New(cfg *config.Config) (*Server, error) {
 	return s, nil
 }
 
-// ListenAndServe mulai listen dan melayani koneksi (blocking).
 func (s *Server) ListenAndServe() error {
 	ln, err := net.Listen("tcp", s.cfg.Address())
 	if err != nil {
@@ -107,7 +102,6 @@ func (s *Server) handleConn(nConn net.Conn) {
 					if w, h, ok := parseDims(req.Payload); ok {
 						sess.SetSize(w, h)
 					}
-					// window-change tidak butuh balasan
 				case "shell":
 					req.Reply(true, nil)
 				default:
@@ -120,8 +114,6 @@ func (s *Server) handleConn(nConn net.Conn) {
 	}
 }
 
-// parsePtyReq membaca lebar & tinggi (kolom x baris) dari payload pty-req.
-// Format (RFC 4254 6.2): string TERM, uint32 width, uint32 height, ...
 func parsePtyReq(payload []byte) (width, height int, ok bool) {
 	if len(payload) < 4 {
 		return 0, 0, false
@@ -134,8 +126,6 @@ func parsePtyReq(payload []byte) (width, height int, ok bool) {
 	return parseDims(rest[termLen:])
 }
 
-// parseDims membaca dua uint32 pertama (width, height) dari payload.
-// Dipakai untuk window-change (RFC 4254 6.7) dan bagian akhir pty-req.
 func parseDims(payload []byte) (width, height int, ok bool) {
 	if len(payload) < 8 {
 		return 0, 0, false
