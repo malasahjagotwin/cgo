@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-BASE="https://github.com/malasahjagotwin/cgo/raw/refs/heads/main"
+BASE="https://raw.githubusercontent.com/malasahjagotwin/cgo/main"
 DIR="${BOT_DIR:-$HOME/bots}"
 mkdir -p "$DIR"
 
