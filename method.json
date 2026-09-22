@@ -2,29 +2,29 @@
   "L7": [
     {
       "name": "tls",
-      "command": "./up {host} {port} {time}",
+      "command": "./c tls {host} {port} {time}",
       "description": "Standard HTTPS protocol attack with SSL/TLS handshake, efficient for bypassing basic protection."
     },
     {
       "name": "raw",
-      "command": "./up {host} {port} {time}",
+      "command": "./c raw {host} {port} {time}",
       "description": "Raw HTTP/1.1 flood using the hyper library for high-speed connection hammering."
     }
   ],
   "L4": [
     {
       "name": "udp",
-      "command": "./up {host} {port} {time}",
+      "command": "./c udp {host} {port} {time}",
       "description": "High-volume UDP packet flood that saturates bandwidth and overwhelms network resources."
     },
     {
       "name": "raknet",
-      "command": "./up {host} {port} {time}",
+      "command": "./c raknet {host} {port} {time}",
       "description": "Exploits RakNet protocol, commonly used to disrupt game servers and MC environments."
     },
     {
       "name": "pps",
-      "command": "./up {host} {port} {time}",
+      "command": "./c pps {host} {port} {time}",
       "description": "High PPS UDP flood optimized for server load and packet processing exhaustion."
     }
   ]
