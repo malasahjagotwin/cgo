@@ -21,7 +21,7 @@ type Store struct {
 func Load(path string) (*Store, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("baca %s: %w", path, err)
+		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
 	var users []User
 	if err := json.Unmarshal(data, &users); err != nil {

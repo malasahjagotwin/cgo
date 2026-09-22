@@ -53,6 +53,30 @@ func (th Theme) Gradient(s string) string {
 	return b.String()
 }
 
+func (th Theme) GradientUnderline(s string) string {
+	runes := []rune(s)
+	n := len(runes)
+	if n == 0 {
+		return s
+	}
+	var b strings.Builder
+	for i, r := range runes {
+		t := 0.0
+		if n > 1 {
+			t = float64(i) / float64(n-1)
+		}
+		c := RGB{
+			R: lerp(float64(th.Start.R), float64(th.End.R), t),
+			G: lerp(float64(th.Start.G), float64(th.End.G), t),
+			B: lerp(float64(th.Start.B), float64(th.End.B), t),
+		}
+		b.WriteString(fmt.Sprintf("\x1b[4;38;2;%d;%d;%dm", c.R, c.G, c.B))
+		b.WriteRune(r)
+	}
+	b.WriteString(reset)
+	return b.String()
+}
+
 func (th Theme) bracket(s string) string {
 	return fg(th.Bracket) + s + reset
 }

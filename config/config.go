@@ -22,14 +22,14 @@ func Parse() (*Config, error) {
 	c := &Config{}
 
 	fs := flag.NewFlagSet("cnc", flag.ContinueOnError)
-	fs.StringVar(&c.Port, "p", "", "port listen SSH server (WAJIB)")
-	fs.StringVar(&c.Host, "host", "0.0.0.0", "alamat bind server")
-	fs.StringVar(&c.UsersFile, "users", "user.json", "path file kredensial JSON")
-	fs.StringVar(&c.HostKeyFile, "hostkey", "keys/host_key", "path private host key SSH")
-	fs.StringVar(&c.Hostname, "hostname", "localhost", "nama host pada prompt")
+	fs.StringVar(&c.Port, "p", "", "SSH server listen port (REQUIRED)")
+	fs.StringVar(&c.Host, "host", "0.0.0.0", "server bind address")
+	fs.StringVar(&c.UsersFile, "users", "user.json", "path to users JSON credentials file")
+	fs.StringVar(&c.HostKeyFile, "hostkey", "keys/host_key", "path to SSH private host key")
+	fs.StringVar(&c.Hostname, "hostname", "localhost", "hostname shown in the prompt")
 
 	fs.Usage = func() {
-		fmt.Fprintf(os.Stderr, "penggunaan: %s -p <port> [opsi]\n\nopsi:\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "usage: %s -p <port> [options]\n\noptions:\n", os.Args[0])
 		fs.PrintDefaults()
 	}
 
@@ -39,7 +39,7 @@ func Parse() (*Config, error) {
 
 	if c.Port == "" {
 		fs.Usage()
-		return nil, fmt.Errorf("flag -p (port) wajib diisi")
+		return nil, fmt.Errorf("flag -p (port) is required")
 	}
 
 	return c, nil
