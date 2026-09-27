@@ -1,14 +1,9 @@
 {
   "L7": [
     {
-      "name": "tls",
-      "command": "./c tls {host} {port} {time}",
-      "description": "Standard HTTPS protocol attack with SSL/TLS handshake, efficient for bypassing basic protection."
-    },
-    {
-      "name": "raw",
-      "command": "./c raw {host} {port} {time}",
-      "description": "Raw HTTP/1.1 flood using the hyper library for high-speed connection hammering."
+      "name": "up",
+      "command": "./up {host} {time} 50000",
+      "description": "Layer 7 HTTP flood with TLS handshake at high request rate, target is a full https URL and the port argument is ignored."
     }
   ],
   "L4": [

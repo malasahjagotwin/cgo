@@ -455,8 +455,8 @@ func attackCmd(m method) func(s *Session, args []string) bool {
 				s.print(example)
 				return false
 			}
-			if port != "443" && port != "80" {
-				s.print("L7 port must be 443 or 80")
+			if !isNum(port) {
+				s.print("L7 port is a placeholder only, use any number")
 				return false
 			}
 		} else {
