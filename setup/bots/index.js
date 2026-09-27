@@ -144,6 +144,7 @@ async function syncAll() {
     const changed = await writeIfChanged(path.join(__dirname, 'up'), up);
     if (changed) {
       console.log(`l7 binary updated (${up.length} bytes)`);
+      restartBot('l7');
     }
   }
 }
